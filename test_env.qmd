@@ -311,7 +311,6 @@ district_ed = math_exams |>
     )
   )
 
-
 teacher_dists = bind_rows(
   inexp_teachers |>
     mutate(ENTITY_CD = as.character(ENTITY_CD)) |>
@@ -334,14 +333,12 @@ teacher_dists = bind_rows(
     )
 )
 
-
 teacher_need = teacher_dists |>
   left_join(
     district_ed |> select(ENTITY_CD, pct_econ_disadvantaged, need_group),
     by = "ENTITY_CD"
   ) |>
   filter(!is.na(pct), !is.na(pct_econ_disadvantaged))
-
 
 teacher_need |>
   ggplot(aes(x = need_group, y = pct, fill = need_group)) +
