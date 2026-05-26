@@ -413,38 +413,91 @@ not-disadvantaged group. That feels like a big deal because if you're not in
 the building you can't catch up academically, so this might be one
 mechanism behind the score gap.
 
-The teacher tables don't have subgroup breakdowns, so for now we're looking
-at how the percent of inexperienced teachers and out-of-certification teachers
-distribute across districts.
+The teacher tables do not include subgroup breakdowns, so we compare teacher staffing at the district level instead. We group districts by their share of economically disadvantaged students, then look at whether high-need districts have higher percentages of inexperienced teachers and teachers working out of certification.
 
 ```{r}
-teacher_dists = inexp_teachers |>
-  filter(YEAR == 2024) |>
-  select(ENTITY_CD, pct = PER_TEACH_INEXP) |>
-  mutate(metric = "Inexperienced teachers (<4 yrs)") |>
-  rbind(
-    out_of_cert |>
-      filter(YEAR == 2024) |>
-      select(ENTITY_CD, pct = PER_OUT_CERT) |>
-      mutate(metric = "Teaching out of certification")
+district_ed = math_exams |>
+  mutate(
+    ENTITY_CD = as.character(ENTITY_CD),
+    TOTAL_COUNT = as.numeric(TOTAL_COUNT)
+  ) |>
+  filter(
+    YEAR == 2024,
+    ASSESSMENT_NAME %in% c("MATH3", "MATH4", "MATH5", "MATH6", "MATH7", "MATH8"),
+    SUBGROUP_NAME %in% c("All Students", "Economically Disadvantaged"),
+    grepl("0000$", ENTITY_CD)
+  ) |>
+  group_by(ENTITY_CD, ENTITY_NAME, SUBGROUP_NAME) |>
+  summarize(total_students = sum(TOTAL_COUNT, na.rm = TRUE), .groups = "drop") |>
+  pivot_wider(
+    names_from = SUBGROUP_NAME,
+    values_from = total_students
+  ) |>
+  mutate(
+    pct_econ_disadvantaged =
+      100 * `Economically Disadvantaged` / `All Students`
+  ) |>
+  filter(!is.na(pct_econ_disadvantaged)) |>
+  mutate(
+    need_group_num = ntile(pct_econ_disadvantaged, 4),
+    need_group = case_when(
+      need_group_num == 1 ~ "Low-need districts\n(bottom 25%)",
+      need_group_num %in% c(2, 3) ~ "Middle districts",
+      need_group_num == 4 ~ "High-need districts\n(top 25%)"
+    ),
+    need_group = factor(
+      need_group,
+      levels = c(
+        "Low-need districts\n(bottom 25%)",
+        "Middle districts",
+        "High-need districts\n(top 25%)"
+      )
+    )
   )
 
-teacher_dists |>
-  ggplot(aes(x = as.numeric(pct), fill = metric)) +
-  geom_histogram(bins = 30, color = "white") +
+teacher_dists = bind_rows(
+  inexp_teachers |>
+    mutate(ENTITY_CD = as.character(ENTITY_CD)) |>
+    filter(YEAR == 2024, grepl("0000$", ENTITY_CD)) |>
+    transmute(
+      ENTITY_CD,
+      ENTITY_NAME,
+      pct = as.numeric(PER_TEACH_INEXP),
+      metric = "Inexperienced teachers (<4 yrs)"
+    ),
+
+  out_of_cert |>
+    mutate(ENTITY_CD = as.character(ENTITY_CD)) |>
+    filter(YEAR == 2024, grepl("0000$", ENTITY_CD)) |>
+    transmute(
+      ENTITY_CD,
+      ENTITY_NAME,
+      pct = as.numeric(PER_OUT_CERT),
+      metric = "Teaching out of certification"
+    )
+)
+
+teacher_need = teacher_dists |>
+  left_join(
+    district_ed |> select(ENTITY_CD, pct_econ_disadvantaged, need_group),
+    by = "ENTITY_CD"
+  ) |>
+  filter(!is.na(pct), !is.na(pct_econ_disadvantaged))
+
+teacher_need |>
+  ggplot(aes(x = need_group, y = pct, fill = need_group)) +
+  geom_boxplot(width = 0.5, alpha = 0.7, outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.35, size = 1.6) +
   facet_wrap(~ metric, scales = "free_y") +
   labs(
-    x = "Percent of teachers in district",
-    y = "Number of districts",
-    title = "Distribution of inexperienced and out-of-certification teachers across NY districts",
-    subtitle = "Each district contributes one observation per metric, 2024"
+    x = NULL,
+    y = "Teachers in category (%)",
+    title = "High-need districts tend to have more teacher staffing instability",
+    subtitle = "Districts are grouped by their share of economically disadvantaged students, 2024",
+    fill = NULL
   ) +
   theme_minimal() +
   theme(legend.position = "none")
 ```
 
-Most districts are clustered at the low end but there's a notable
-right tail, with some districts where 30%+ of teachers are
-inexperienced or 20%+ are teaching out of certification. We can merge this with each district's percent
-economically disadvantaged, so we can answer are the districts in that right
-tail also the high-need districts?
+The chart shows that high-need districts generally have higher percentages of inexperienced teachers and teachers working out of certification. Each jittered point represents one district, while the boxplots summarize the overall distribution within each need group. The pattern is not identical for every district, but the distribution shifts upward for high-need districts, especially in the right tail. This suggests that disadvantaged districts may face structural challenges beyond student test scores, including less stable teacher staffing.
