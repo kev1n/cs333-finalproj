@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chronic absenteeism by subgroup, NY State 2024</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    background: #fff;
+    color: #222;
+    margin: 40px auto;
+    max-width: 760px;
+    padding: 0 24px;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .subtitle { color: #666; font-size: 14px; margin-bottom: 28px; }
+  .chart { display: grid; grid-template-columns: 240px 1fr; row-gap: 14px; column-gap: 16px; align-items: center; }
+  .label { font-size: 14px; text-align: right; color: #333; }
+  .bar-wrap { position: relative; height: 22px; background: #f1f1f1; border-radius: 3px; }
+  .bar { height: 100%; border-radius: 3px; }
+  .value { position: absolute; top: 50%; transform: translateY(-50%); left: calc(100% + 8px); font-size: 13px; color: #333; white-space: nowrap; }
+  .axis { margin-top: 18px; font-size: 12px; color: #666; display: flex; justify-content: space-between; padding-left: 256px; }
+  .axis span { width: 1px; }
+  .footnote { margin-top: 28px; font-size: 12px; color: #888; line-height: 1.5; }
+  .all { background: #888; }
+  .not-ed { background: #4c9f70; }
+  .ed { background: #c0392b; }
+  .swd { background: #e67e22; }
+  .ell { background: #8e44ad; }
+</style>
+</head>
+<body>
+  <h1>Disadvantaged students miss a lot more school</h1>
+  <div class="subtitle">Chronic absenteeism = missing 10% or more of school days, NY State 2024. Bars show the average school-level rate.</div>
+
+  <div class="chart">
+    <div class="label">Not Economically Disadvantaged</div>
+    <div class="bar-wrap"><div class="bar not-ed" style="width: 47.1%"></div><div class="value">16.5%</div></div>
+
+    <div class="label">All Students</div>
+    <div class="bar-wrap"><div class="bar all" style="width: 71.4%"></div><div class="value">25.0%</div></div>
+
+    <div class="label">Students with Disabilities</div>
+    <div class="bar-wrap"><div class="bar swd" style="width: 86.6%"></div><div class="value">30.3%</div></div>
+
+    <div class="label">English Language Learner</div>
+    <div class="bar-wrap"><div class="bar ell" style="width: 87.7%"></div><div class="value">30.7%</div></div>
+
+    <div class="label">Economically Disadvantaged</div>
+    <div class="bar-wrap"><div class="bar ed" style="width: 89.1%"></div><div class="value">31.2%</div></div>
+  </div>
+
+  <div class="axis">
+    <span>0%</span><span>10%</span><span>20%</span><span>30%</span><span>35%</span>
+  </div>
+
+  <div class="footnote">
+    The chronic absenteeism table doesn't report a "Not Economically Disadvantaged" subgroup directly, so that bar is back-calculated by subtracting the ED counts from All Students counts at the school level, then averaging. The Econ. Disadvantaged rate is roughly double the non-disadvantaged rate.
+  </div>
+</body>
+</html>

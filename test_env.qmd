@@ -1,0 +1,306 @@
+---
+title: "Milestone 1: NY State Report Card"
+format:
+  html:
+    embed-resources: true
+    df-print: paged
+editor:
+  markdown:
+    wrap: 80
+---
+
+For this milestone we're exploring the New York State School Report Card 2024-25
+release. 
+
+We want to use this dataset to look at three questions:
+
+1.  How does money affect pupil performance at these schools?
+2.  How have test scores trended over the last few years, and what does the
+    increase/dropoff look like for affluent schools versus poorer schools? And
+    how does it compare in math versus reading?
+3.  In what ways are disadvantaged schools disadvantaged versus their peers?
+
+With more data, we'd also like to look at how AI and social media lead to performance changes of students over time.
+
+
+```{r setup}
+#| message: false
+#| warning: false
+library(tidyverse)
+library(ggrepel)
+```
+
+## Data loading
+
+The database has around 30 tables. The ones that look useful for the 
+questions are the math and ELA exam tables, the expenditures table, the
+chronic absenteeism table, and the two teacher tables (inexperienced teachers
+and out-of-certification teachers).
+
+```{r}
+#| message: false
+math_exams = read_csv("data/Annual_EM_MATH.csv", show_col_types = FALSE)
+ela_exams  = read_csv("data/Annual_EM_ELA.csv",  show_col_types = FALSE)
+expenditures = read_csv("data/Expenditures_per_Pupil.csv", show_col_types = FALSE)
+absenteeism = read_csv("data/Chronic_Absenteeism.csv", show_col_types = FALSE)
+inexp_teachers = read_csv("data/Inexperienced_Teachers.csv", show_col_types = FALSE)
+out_of_cert = read_csv("data/Out_of_Cert_Teachers.csv", show_col_types = FALSE)
+```
+
+The exam tables are pretty big (around 650k rows each) because every row is a
+school × assessment × subgroup combination. The expenditure and teacher tables
+are at the district level, which is one row per district per year, so they're
+much smaller.
+
+```{r}
+math_exams
+```
+
+```{r}
+expenditures
+```
+
+```{r}
+glimpse(math_exams)
+```
+
+```{r}
+glimpse(expenditures)
+```
+
+```{r}
+glimpse(inexp_teachers)
+```
+
+```{r}
+math_exams |> count(YEAR)
+```
+
+The dataset only has 2024 and 2025. So when we say trends, we really only have two data points to work with for
+this milestone. For the final, we want to grab earlier SRC releases.
+
+```{r}
+math_exams |> count(SUBGROUP_NAME)
+```
+
+The exam tables already break each result down into a long list of subgroups
+(Economically Disadvantaged, English Language Learner, race/ethnicity, gender,
+homeless, foster care, etc.). That's helpful, because it already provides a definition
+of disadvantaged.
+
+```{r}
+math_exams |> count(ASSESSMENT_NAME)
+```
+
+MATH3_8 is a roll-up summary, but the MEAN_SCORE column is empty
+for those rows. The grade-level rows (MATH3 through MATH8) are the ones
+that actually have scale scores. So we'll filter to those when we want a number
+to compare.
+
+ENTITY_CD column is a 12-digit code that identifies both
+districts and schools. District codes end in 0000, while school codes don't. The
+expenditures table mixes both kinds of rows. we'll filter to districts only
+when joining because we only care about the aggregate
+
+```{r}
+expenditures |>
+  filter(YEAR == 2024) |>
+  count(district = grepl("0000$", ENTITY_CD))
+```
+
+Around 700 districts and 4500 schools.
+
+## Goal 1: Does money buy performance?
+
+Take each district's per-pupil spending and its average math score, and plot one against the other.
+
+```{r}
+district_math = math_exams |>
+  filter(ASSESSMENT_NAME %in% c("MATH3","MATH4","MATH5","MATH6","MATH7","MATH8"),
+         SUBGROUP_NAME == "All Students",
+         YEAR == 2024,
+         grepl("0000$", ENTITY_CD)) |>
+  group_by(ENTITY_CD, ENTITY_NAME) |>
+  summarize(avg_math_score = mean(as.numeric(MEAN_SCORE), na.rm = TRUE),
+            .groups = "drop")
+
+district_money = expenditures |>
+  filter(YEAR == 2024,
+         grepl("0000$", ENTITY_CD),
+         PUPIL_COUNT_TOT >= 100) |>
+  select(ENTITY_CD, per_pupil_spending = PER_FED_STATE_LOCAL_EXP)
+
+money_vs_score = merge(district_math, district_money, by = "ENTITY_CD")
+
+money_vs_score |>
+  ggplot(aes(x = per_pupil_spending, y = avg_math_score)) +
+  geom_point(alpha = 0.35, color = "steelblue") +
+  geom_smooth(method = "lm", color = "firebrick", se = FALSE) +
+  labs(
+    x = "Per-pupil spending ($, 2024)",
+    y = "Average grade 3-8 math scale score",
+    title = "Money doesn't seem to be doing the work",
+    subtitle = "Each point is a NY district"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+cor(money_vs_score$per_pupil_spending, money_vs_score$avg_math_score)
+```
+
+We expected the line to slope up and it kind of does the opposite, slightly. Our
+guess is that high-need districts already get more per-pupil funding through
+state and federal equity aid, so the districts spending the most aren't
+actually the affluent ones. That makes spending a weird axis to look at on its
+own, and pushes us toward Goal 2 where we look at affluence directly.
+
+## Goal 2: Affluent vs poorer schools in math and reading
+
+Since the dataset already labels each result as Economically Disadvantaged or
+Not Economically Disadvantaged, we can compare those two groups directly.
+
+```{r}
+math_by_subgroup = math_exams |>
+  filter(ASSESSMENT_NAME %in% c("MATH3","MATH4","MATH5","MATH6","MATH7","MATH8"),
+         SUBGROUP_NAME %in% c("Economically Disadvantaged",
+                              "Not Economically Disadvantaged")) |>
+  group_by(YEAR, SUBGROUP_NAME) |>
+  summarize(avg_score = mean(as.numeric(MEAN_SCORE), na.rm = TRUE),
+            .groups = "drop") |>
+  mutate(subject = "Math")
+
+ela_by_subgroup = ela_exams |>
+  filter(ASSESSMENT_NAME %in% c("ELA3","ELA4","ELA5","ELA6","ELA7","ELA8"),
+         SUBGROUP_NAME %in% c("Economically Disadvantaged",
+                              "Not Economically Disadvantaged")) |>
+  group_by(YEAR, SUBGROUP_NAME) |>
+  summarize(avg_score = mean(as.numeric(MEAN_SCORE), na.rm = TRUE),
+            .groups = "drop") |>
+  mutate(subject = "ELA (Reading)")
+
+scores_by_subgroup = rbind(math_by_subgroup, ela_by_subgroup)
+
+scores_by_subgroup |>
+  ggplot(aes(x = factor(YEAR), y = avg_score,
+             color = SUBGROUP_NAME, group = SUBGROUP_NAME)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 3) +
+  facet_wrap(~ subject) +
+  labs(
+    x = "Year",
+    y = "Average scale score",
+    color = NULL,
+    title = "The gap between disadvantaged and not is wide and not closing",
+    subtitle = "Average grade 3-8 scale score, NY State"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+scores_by_subgroup
+```
+
+The gap is real big about 13-14 scale score points in both subjects and it
+basically doesn't move from 2024 to 2025. The math gap looks slightly bigger
+than the ELA gap, which is think is interesting but we'd want to double-check
+that with a more careful comparison since math and ELA scales aren't
+necessarily on the same units.
+
+## Goal 3: How are disadvantaged schools disadvantaged?
+
+The score gap shows up in Goal 2, but we wanted to know whether the gap has
+structural causes too, things like teacher quality and absenteeism. The
+chronic absenteeism table also has the same subgroup breakdown, so we can do a
+direct comparison there.
+
+```{r}
+absent_2024 = absenteeism |>
+  filter(YEAR == 2024) |>
+  mutate(ENROLLMENT   = suppressWarnings(as.numeric(ENROLLMENT)),
+         ABSENT_COUNT = suppressWarnings(as.numeric(ABSENT_COUNT)),
+         ABSENT_RATE  = suppressWarnings(as.numeric(ABSENT_RATE)))
+
+# Chronic_Absenteeism doesn't report "Not Economically Disadvantaged" directly,
+# so back-calculate it at the school level: All Students minus Econ. Disadvantaged.
+not_ed = absent_2024 |>
+  filter(SUBGROUP_NAME %in% c("All Students", "Economically Disadvantaged")) |>
+  select(ENTITY_CD, SUBGROUP_NAME, ENROLLMENT, ABSENT_COUNT) |>
+  pivot_wider(names_from = SUBGROUP_NAME,
+              values_from = c(ENROLLMENT, ABSENT_COUNT)) |>
+  mutate(enroll = `ENROLLMENT_All Students` - `ENROLLMENT_Economically Disadvantaged`,
+         absent = `ABSENT_COUNT_All Students` - `ABSENT_COUNT_Economically Disadvantaged`,
+         ABSENT_RATE = ifelse(enroll > 0, 100 * absent / enroll, NA)) |>
+  filter(!is.na(ABSENT_RATE)) |>
+  summarize(SUBGROUP_NAME = "Not Economically Disadvantaged",
+            avg_absent_rate = mean(ABSENT_RATE, na.rm = TRUE))
+
+absent_by_group = absent_2024 |>
+  filter(SUBGROUP_NAME %in% c("Economically Disadvantaged",
+                              "English Language Learner",
+                              "Students with Disabilities",
+                              "All Students")) |>
+  group_by(SUBGROUP_NAME) |>
+  summarize(avg_absent_rate = mean(ABSENT_RATE, na.rm = TRUE),
+            .groups = "drop") |>
+  bind_rows(not_ed)
+
+absent_by_group |>
+  ggplot(aes(x = reorder(SUBGROUP_NAME, avg_absent_rate),
+             y = avg_absent_rate,
+             fill = SUBGROUP_NAME)) +
+  geom_col(width = 0.6) +
+  geom_text(aes(label = sprintf("%.1f%%", avg_absent_rate)), hjust = -0.2) +
+  coord_flip() +
+  ylim(0, 35) +
+  labs(
+    x = NULL,
+    y = "Average chronic absenteeism rate (%)",
+    title = "Disadvantaged students miss a lot more school",
+    subtitle = "Chronic absenteeism = missing 10% or more of school days, 2024"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+The disadvantaged group's chronic absenteeism rate is roughly double the
+not-disadvantaged group. That feels like a big deal because if you're not in
+the building you can't catch up academically, so this might be one
+mechanism behind the score gap.
+
+The teacher tables don't have subgroup breakdowns, so for now we're looking
+at how the percent of inexperienced teachers and out-of-certification teachers
+distribute across districts.
+
+```{r}
+teacher_dists = inexp_teachers |>
+  filter(YEAR == 2024) |>
+  select(ENTITY_CD, pct = PER_TEACH_INEXP) |>
+  mutate(metric = "Inexperienced teachers (<4 yrs)") |>
+  rbind(
+    out_of_cert |>
+      filter(YEAR == 2024) |>
+      select(ENTITY_CD, pct = PER_OUT_CERT) |>
+      mutate(metric = "Teaching out of certification")
+  )
+
+teacher_dists |>
+  ggplot(aes(x = as.numeric(pct), fill = metric)) +
+  geom_histogram(bins = 30, color = "white") +
+  facet_wrap(~ metric, scales = "free_y") +
+  labs(
+    x = "Percent of teachers in district",
+    y = "Number of districts",
+    title = "Distribution of inexperienced and out-of-certification teachers across NY districts",
+    subtitle = "Each district contributes one observation per metric, 2024"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+Most districts are clustered at the low end but there's a notable
+right tail, with some districts where 30%+ of teachers are
+inexperienced or 20%+ are teaching out of certification. We can merge this with each district's percent
+economically disadvantaged, so we can answer are the districts in that right
+tail also the high-need districts?

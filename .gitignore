@@ -1,0 +1,18 @@
+# Data files (distributed separately)
+data/
+*.accdb
+*.mdb
+SRC2025ReadMe_Group3.pdf
+
+# R / RStudio
+.Rhistory
+.Rproj.user/
+.RData
+.Ruserdata
+
+# Quarto
+/.quarto/
+_freeze/
+
+# OS
+.DS_Store
