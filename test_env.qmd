@@ -28,6 +28,8 @@ With more data, we'd also like to look at how AI and social media lead to perfor
 #| warning: false
 library(tidyverse)
 library(ggrepel)
+library(ggtext)
+library(scales)
 ```
 
 ## Data loading
@@ -112,48 +114,190 @@ Around 700 districts and 4500 schools.
 
 ## Goal 1: Does money buy performance?
 
-Take each district's per-pupil spending and its average math score, and plot one against the other.
+Our first instinct was a simple scatter — do districts that spend more per pupil
+score higher?
 
-```{r}
+```{r goal1-data}
+#| message: false
+
+# District-level average math score (grades 3-8, all students, 2024)
 district_math = math_exams |>
-  filter(ASSESSMENT_NAME %in% c("MATH3","MATH4","MATH5","MATH6","MATH7","MATH8"),
-         SUBGROUP_NAME == "All Students",
-         YEAR == 2024,
-         grepl("0000$", ENTITY_CD)) |>
+  filter(
+    ASSESSMENT_NAME %in% c("MATH3","MATH4","MATH5","MATH6","MATH7","MATH8"),
+    SUBGROUP_NAME == "All Students",
+    YEAR == 2024,
+    grepl("0000$", ENTITY_CD)
+  ) |>
   group_by(ENTITY_CD, ENTITY_NAME) |>
   summarize(avg_math_score = mean(as.numeric(MEAN_SCORE), na.rm = TRUE),
             .groups = "drop")
 
+# % economically disadvantaged per district
+district_pct_ed = math_exams |>
+  filter(
+    ASSESSMENT_NAME %in% c("MATH3","MATH4","MATH5","MATH6","MATH7","MATH8"),
+    SUBGROUP_NAME %in% c("All Students", "Economically Disadvantaged"),
+    YEAR == 2024,
+    grepl("0000$", ENTITY_CD)
+  ) |>
+  group_by(ENTITY_CD, SUBGROUP_NAME) |>
+  summarize(n = sum(as.numeric(TOTAL_COUNT), na.rm = TRUE), .groups = "drop") |>
+  pivot_wider(names_from = SUBGROUP_NAME, values_from = n) |>
+  mutate(pct_ed = 100 * `Economically Disadvantaged` / `All Students`) |>
+  select(ENTITY_CD, pct_ed)
+
+# Per-pupil spending split by source (2024, districts >= 100 pupils)
 district_money = expenditures |>
-  filter(YEAR == 2024,
-         grepl("0000$", ENTITY_CD),
-         PUPIL_COUNT_TOT >= 100) |>
-  select(ENTITY_CD, per_pupil_spending = PER_FED_STATE_LOCAL_EXP)
+  filter(YEAR == 2024, grepl("0000$", ENTITY_CD), PUPIL_COUNT_TOT >= 100) |>
+  select(ENTITY_CD,
+         per_pupil_spending = PER_FED_STATE_LOCAL_EXP,
+         federal_pp         = PER_FEDERAL_EXP,
+         statelocal_pp      = PER_STATE_LOCAL_EXP)
 
-money_vs_score = merge(district_math, district_money, by = "ENTITY_CD")
+# Full joined dataset
+districts = district_math |>
+  inner_join(district_money, by = "ENTITY_CD") |>
+  inner_join(district_pct_ed, by = "ENTITY_CD") |>
+  filter(!is.na(avg_math_score), !is.na(pct_ed), !is.na(per_pupil_spending),
+         !grepl("^0{6}", ENTITY_CD))
+```
 
-money_vs_score |>
-  ggplot(aes(x = per_pupil_spending, y = avg_math_score)) +
-  geom_point(alpha = 0.35, color = "steelblue") +
-  geom_smooth(method = "lm", color = "firebrick", se = FALSE) +
-  labs(
-    x = "Per-pupil spending ($, 2024)",
-    y = "Average grade 3-8 math scale score",
-    title = "Money doesn't seem to be doing the work",
-    subtitle = "Each point is a NY district"
+### The puzzle: spending and scores move in the wrong direction
+
+```{r goal1-plot1}
+#| fig-width: 8
+#| fig-height: 5.5
+
+
+ggplot(districts, aes(x = per_pupil_spending, y = avg_math_score)) +
+  geom_point(alpha = 0.45, size = 2.2, color = "steelblue") +
+  scale_x_continuous(
+    labels = label_dollar(scale = 1e-3, suffix = "k"),
+    limits = c(NA, 90000)
   ) +
-  theme_minimal()
+  labs(
+    title    = "Spending doesn't predict scores — if anything, the pattern runs backwards",
+    subtitle = "Each point is a NY school district, 2024–25.",
+    x        = "Per-pupil spending (federal + state + local)",
+    y        = "Average grade 3–8 math scale score",
+    caption  = "Source: NY State School Report Card 2024–25 release. Districts with ≥ 100 pupils."
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(color = "gray40", size = 10.5),
+    plot.caption  = element_text(color = "gray55", size = 8)
+  )
 ```
 
-```{r}
-cor(money_vs_score$per_pupil_spending, money_vs_score$avg_math_score)
+There's no upward pattern here — if anything, higher spending is weakly
+associated with *lower* scores, the opposite of what we expected. So what's
+going on? The next chart shows why.
+
+### Why high-need districts spend more: equity funding at work
+
+```{r goal1-plot2}
+#| fig-width: 8
+#| fig-height: 4.8
+
+districts_q = districts |>
+  mutate(need_group = cut(
+    pct_ed,
+    breaks = quantile(pct_ed, probs = 0:5/5, na.rm = TRUE),
+    labels = c("Lowest need\n(0–20th %ile)", "Low need\n(20–40th %ile)",
+               "Middle\n(40–60th %ile)",     "High need\n(60–80th %ile)",
+               "Highest need\n(80–100th %ile)"),
+    include.lowest = TRUE
+  ))
+
+funding_long = districts_q |>
+  group_by(need_group) |>
+  summarize(Federal         = mean(federal_pp,    na.rm = TRUE),
+            `State & Local` = mean(statelocal_pp, na.rm = TRUE),
+            .groups = "drop") |>
+  pivot_longer(cols = c("Federal", "State & Local"),
+               names_to = "source", values_to = "spending") |>
+  mutate(source = factor(source, levels = c("State & Local", "Federal")))
+
+totals = funding_long |>
+  group_by(need_group) |>
+  summarize(total = sum(spending), .groups = "drop")
+
+ggplot(funding_long, aes(x = need_group, y = spending, fill = source)) +
+  geom_col(width = 0.65) +
+  geom_text(data = totals,
+            aes(x = need_group, y = total,
+                label = dollar(total, scale = 1e-3, suffix = "k")),
+            inherit.aes = FALSE,
+            vjust = -0.4, size = 3.4, fontface = "bold", color = "gray20") +
+  scale_y_continuous(labels = label_dollar(scale = 1e-3, suffix = "k"),
+                     expand = expansion(mult = c(0, 0.1))) +
+  scale_fill_manual(values = c("Federal" = "#e08214", "State & Local" = "#4d9de0"),
+                    name = "Funding source") +
+  labs(
+    title    = "Equity aid flows to high-need districts — but state & local funding barely changes",
+    subtitle = "Average per-pupil spending by district needs quintile, 2024–25.",
+    x        = NULL, y = "Average per-pupil spending",
+    caption  = "Source: NY State School Report Card 2024–25 release."
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 13.5),
+    plot.subtitle = element_text(color = "gray40", size = 10.5),
+    legend.position = "top",
+    plot.caption  = element_text(color = "gray55", size = 8),
+    panel.grid.major.x = element_blank()
+  )
 ```
 
-We expected the line to slope up and it kind of does the opposite, slightly. Our
-guess is that high-need districts already get more per-pupil funding through
-state and federal equity aid, so the districts spending the most aren't
-actually the affluent ones. That makes spending a weird axis to look at on its
-own, and pushes us toward Goal 2 where we look at affluence directly.
+High-need districts do receive more money overall, mainly through federal aid.
+But that extra funding hasn't translated into higher scores — which suggests
+money alone isn't enough to close the gap.
+
+### The real driver: poverty, not spending
+
+```{r goal1-plot3}
+#| fig-width: 8
+#| fig-height: 5.5
+
+ggplot(districts, aes(x = pct_ed, y = avg_math_score, color = per_pupil_spending)) +
+  geom_point(alpha = 0.55, size = 2.2) +
+  geom_smooth(method = "lm", color = "gray20", linewidth = 1,
+              se = FALSE) +
+  scale_x_continuous(labels = function(x) paste0(x, "%")) +
+  scale_color_viridis_c(
+    option = "plasma", direction = -1,
+    name   = "Per-pupil\nspending",
+    labels = label_dollar(scale = 1e-3, suffix = "k"),
+    breaks = c(20000, 35000, 50000, 75000)
+  ) +
+  labs(
+    title    = "Poverty rate predicts scores far more cleanly than spending does",
+    subtitle = "Higher-spending districts (purple) cluster at the high-poverty end.",
+    x        = "% of students economically disadvantaged",
+    y        = "Average grade 3–8 math scale score",
+    caption  = "Source: NY State School Report Card 2024–25 release."
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title    = element_text(face = "bold", size = 13.5),
+    plot.subtitle = element_text(color = "gray40", size = 10.5),
+    legend.position = "right",
+    plot.caption  = element_text(color = "gray55", size = 8)
+  )
+```
+
+```{r goal1-cors}
+#| echo: false
+r_spend = cor(districts$per_pupil_spending, districts$avg_math_score,
+              use = "complete.obs") |> round(2)
+r_pov   = cor(districts$pct_ed, districts$avg_math_score,
+              use = "complete.obs") |> round(2)
+```
+
+Poverty rate is a strong predictor of scores (r = `r r_pov`), far more so than
+spending (r = `r r_spend`). That raises the next question: how wide is this
+gap, and is it closing?
 
 ## Goal 2: Affluent vs poorer schools in math and reading
 
