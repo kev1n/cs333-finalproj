@@ -55,26 +55,6 @@ are at the district level, which is one row per district per year, so they're
 much smaller.
 
 ```{r}
-math_exams
-```
-
-```{r}
-expenditures
-```
-
-```{r}
-glimpse(math_exams)
-```
-
-```{r}
-glimpse(expenditures)
-```
-
-```{r}
-glimpse(inexp_teachers)
-```
-
-```{r}
 math_exams |> count(YEAR)
 ```
 
@@ -114,7 +94,7 @@ Around 700 districts and 4500 schools.
 
 ## Goal 1: Does money buy performance?
 
-Our first instinct was a simple scatter — do districts that spend more per pupil
+Our first instinct was a simple scatter: do districts that spend more per pupil
 score higher?
 
 ```{r goal1-data}
@@ -176,7 +156,7 @@ ggplot(districts, aes(x = per_pupil_spending, y = avg_math_score)) +
     limits = c(NA, 90000)
   ) +
   labs(
-    title    = "Spending doesn't predict scores — if anything, the pattern runs backwards",
+    title    = "Spending doesn't predict scores. If anything, the pattern runs backwards",
     subtitle = "Each point is a NY school district, 2024–25.",
     x        = "Per-pupil spending (federal + state + local)",
     y        = "Average grade 3–8 math scale score",
@@ -190,9 +170,9 @@ ggplot(districts, aes(x = per_pupil_spending, y = avg_math_score)) +
   )
 ```
 
-There's no upward pattern here — if anything, higher spending is weakly
+There's no upward pattern here. If anything, higher spending is weakly
 associated with *lower* scores, the opposite of what we expected. So what's
-going on? The next chart shows why.
+going on?
 
 ### Why high-need districts spend more: equity funding at work
 
@@ -235,7 +215,7 @@ ggplot(funding_long, aes(x = need_group, y = spending, fill = source)) +
   scale_fill_manual(values = c("Federal" = "#e08214", "State & Local" = "#4d9de0"),
                     name = "Funding source") +
   labs(
-    title    = "Equity aid flows to high-need districts — but state & local funding barely changes",
+    title    = "Equity aid flows to high-need districts, but state & local funding barely changes",
     subtitle = "Average per-pupil spending by district needs quintile, 2024–25.",
     x        = NULL, y = "Average per-pupil spending",
     caption  = NULL
@@ -251,7 +231,7 @@ ggplot(funding_long, aes(x = need_group, y = spending, fill = source)) +
 ```
 
 High-need districts do receive more money overall, mainly through federal aid.
-But that extra funding hasn't translated into higher scores — which suggests
+But that extra funding hasn't translated into higher scores, which suggests
 money alone isn't enough to close the gap.
 
 ### The real driver: poverty, not spending
@@ -299,8 +279,10 @@ gap, and is it closing?
 
 ## Goal 2: Affluent vs poorer schools in math and reading
 
-Since the dataset already labels each result as Economically Disadvantaged or
-Not Economically Disadvantaged, we can compare those two groups directly.
+If poverty predicts scores more cleanly than spending, the next question is
+how wide that gap actually is, and whether it's moving.
+
+### A 13-point gap that doesn't budge
 
 ```{r}
 math_by_subgroup = math_exams |>
@@ -340,36 +322,27 @@ scores_by_subgroup |>
   theme(legend.position = "bottom")
 ```
 
-```{r}
-scores_by_subgroup
-```
+Disadvantaged students sit roughly 13–14 scale-score points behind their peers
+in both subjects, and the gap barely moves between 2024 and 2025. Math runs a
+hair wider than ELA, but the two subjects don't share a scale, so that's a
+soft observation.
 
-The gap is real big about 13-14 scale score points in both subjects and it
-basically doesn't move from 2024 to 2025. The math gap looks slightly bigger
-than the ELA gap, which is think is interesting but we'd want to double-check
-that with a more careful comparison since math and ELA scales aren't
-necessarily on the same units.
+### The longer view: COVID broke the trend
 
-Pulling in earlier SRC releases gives a longer view of the same gap. The chart
-below uses % passing or better (rather than scale score) across 2015–2025, so it
-covers both pre- and post-COVID years.
+![Standardized test scores: economically disadvantaged vs not, ELA and Math, 2015–2025](passing_rate_by_econ_2015_2025.png)
 
-![Percent passing or better, ELA and Math, by economic disadvantage status, 2015–2025](passing_rate_by_econ_2015_2025.png)
-
-The pre-COVID years (2015–2019) show the gap between disadvantaged and
-not-disadvantaged students slowly narrowing as both groups improved. After the
-COVID-19 disruption, passing rates for economically disadvantaged students
-dropped sharply, especially in math, and the gap widened back out. By 2025 the
-not-disadvantaged group has mostly recovered to pre-pandemic levels, while the
-disadvantaged group is still trailing — so the flat 2024–2025 gap we saw in the
-scale-score chart is really the tail end of a much larger COVID-era setback.
+Before the pandemic, both groups climbed together. After, math fell harder
+than ELA for economically disadvantaged students, and they haven't recovered
+to their pre-pandemic trajectory the way their peers have. The flat 2024–2025
+gap isn't steady state. It's the tail end of a bigger setback.
 
 ## Goal 3: How are disadvantaged schools disadvantaged?
 
-The score gap shows up in Goal 2, but we wanted to know whether the gap has
-structural causes too, things like teacher quality and absenteeism. The
-chronic absenteeism table also has the same subgroup breakdown, so we can do a
-direct comparison there.
+A gap this wide and this stuck rarely runs on student effort alone. Two
+structural mechanisms are measurable in this dataset: how often students
+show up, and who's teaching them.
+
+### Showing up isn't equal either
 
 ```{r}
 absent_2024 = absenteeism |>
@@ -503,12 +476,14 @@ absent_by_group |>
   axis.text.x = element_text(size = 9)
 )
 ```
-The disadvantaged group's chronic absenteeism rate is roughly double the
-not-disadvantaged group. That feels like a big deal because if you're not in
-the building you can't catch up academically, so this might be one
-mechanism behind the score gap.
+Economically disadvantaged students miss roughly twice as much school as
+their peers. You can't close an academic gap from outside the building, which
+makes absenteeism a plausible cause, not just a symptom.
 
-The teacher tables do not include subgroup breakdowns, so we compare teacher staffing at the district level instead. We group districts by their share of economically disadvantaged students, then look at whether high-need districts have higher percentages of inexperienced teachers and teachers working out of certification.
+### High-need districts shoulder rougher staffing too
+
+Teacher data doesn't break down by student subgroup, so we shift to the
+district level: do high-need districts get a worse staffing deal?
 
 ```{r}
 district_ed = math_exams |>
@@ -595,4 +570,10 @@ teacher_need |>
   theme(legend.position = "none")
 ```
 
-The chart shows that high-need districts generally have higher percentages of inexperienced teachers and teachers working out of certification. Each jittered point represents one district, while the boxplots summarize the overall distribution within each need group. The pattern is not identical for every district, but the distribution shifts upward for high-need districts, especially in the right tail. This suggests that disadvantaged districts may face structural challenges beyond student test scores, including less stable teacher staffing.
+Each jittered point is one district and the boxplots summarize the
+distribution within each need group. The pattern isn't identical district to
+district, but both metrics shift upward as need rises, with a noticeably
+heavier right tail. Disadvantaged districts face structural challenges that
+go beyond student test scores, including less stable teacher staffing.
+Combined with absenteeism, the score gap isn't only about what students bring
+to school; it's about what school brings to them.
