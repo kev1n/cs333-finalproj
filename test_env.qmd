@@ -350,6 +350,20 @@ than the ELA gap, which is think is interesting but we'd want to double-check
 that with a more careful comparison since math and ELA scales aren't
 necessarily on the same units.
 
+Pulling in earlier SRC releases gives a longer view of the same gap. The chart
+below uses % passing or better (rather than scale score) across 2015–2025, so it
+covers both pre- and post-COVID years.
+
+![Percent passing or better, ELA and Math, by economic disadvantage status, 2015–2025](passing_rate_by_econ_2015_2025.png)
+
+The pre-COVID years (2015–2019) show the gap between disadvantaged and
+not-disadvantaged students slowly narrowing as both groups improved. After the
+COVID-19 disruption, passing rates for economically disadvantaged students
+dropped sharply, especially in math, and the gap widened back out. By 2025 the
+not-disadvantaged group has mostly recovered to pre-pandemic levels, while the
+disadvantaged group is still trailing — so the flat 2024–2025 gap we saw in the
+scale-score chart is really the tail end of a much larger COVID-era setback.
+
 ## Goal 3: How are disadvantaged schools disadvantaged?
 
 The score gap shows up in Goal 2, but we wanted to know whether the gap has
