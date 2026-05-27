@@ -180,7 +180,7 @@ ggplot(districts, aes(x = per_pupil_spending, y = avg_math_score)) +
     subtitle = "Each point is a NY school district, 2024–25.",
     x        = "Per-pupil spending (federal + state + local)",
     y        = "Average grade 3–8 math scale score",
-    caption  = "Source: NY State School Report Card 2024–25 release. Districts with ≥ 100 pupils."
+    caption  = NULL
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -238,7 +238,7 @@ ggplot(funding_long, aes(x = need_group, y = spending, fill = source)) +
     title    = "Equity aid flows to high-need districts — but state & local funding barely changes",
     subtitle = "Average per-pupil spending by district needs quintile, 2024–25.",
     x        = NULL, y = "Average per-pupil spending",
-    caption  = "Source: NY State School Report Card 2024–25 release."
+    caption  = NULL
   ) +
   theme_minimal(base_size = 13) +
   theme(
@@ -273,10 +273,8 @@ ggplot(districts, aes(x = pct_ed, y = avg_math_score, color = per_pupil_spending
   ) +
   labs(
     title    = "Poverty rate predicts scores far more cleanly than spending does",
-    subtitle = "Higher-spending districts (purple) cluster at the high-poverty end.",
     x        = "% of students economically disadvantaged",
-    y        = "Average grade 3–8 math scale score",
-    caption  = "Source: NY State School Report Card 2024–25 release."
+    y        = "Average grade 3–8 math scale score"
   ) +
   theme_minimal(base_size = 13) +
   theme(
