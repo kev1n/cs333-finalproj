@@ -406,6 +406,89 @@ absent_by_group |>
   theme(legend.position = "none")
 ```
 
+```{r}
+absent_2024 = absenteeism |>
+  filter(YEAR == 2024) |>
+  mutate(ENROLLMENT   = suppressWarnings(as.numeric(ENROLLMENT)),
+         ABSENT_COUNT = suppressWarnings(as.numeric(ABSENT_COUNT)),
+         ABSENT_RATE  = suppressWarnings(as.numeric(ABSENT_RATE)))
+
+not_ed = absent_2024 |>
+  filter(SUBGROUP_NAME %in% c("All Students", "Economically Disadvantaged")) |>
+  select(ENTITY_CD, SUBGROUP_NAME, ENROLLMENT, ABSENT_COUNT) |>
+  pivot_wider(names_from = SUBGROUP_NAME,
+              values_from = c(ENROLLMENT, ABSENT_COUNT)) |>
+  mutate(enroll = `ENROLLMENT_All Students` - `ENROLLMENT_Economically Disadvantaged`,
+         absent = `ABSENT_COUNT_All Students` - `ABSENT_COUNT_Economically Disadvantaged`,
+         ABSENT_RATE = ifelse(enroll > 0, 100 * absent / enroll, NA)) |>
+  filter(!is.na(ABSENT_RATE)) |>
+  summarize(SUBGROUP_NAME = "Not Economically Disadvantaged",
+            avg_attend_rate = 100 - mean(ABSENT_RATE, na.rm = TRUE))
+
+absent_by_group = absent_2024 |>
+  filter(SUBGROUP_NAME %in% c("Economically Disadvantaged",
+                              "English Language Learner",
+                              "Students with Disabilities",
+                              "All Students")) |>
+  group_by(SUBGROUP_NAME) |>
+  summarize(avg_attend_rate = 100 - mean(ABSENT_RATE, na.rm = TRUE),
+            .groups = "drop") |>
+  bind_rows(not_ed)
+
+all_students_rate = absent_by_group |>
+  filter(SUBGROUP_NAME == "All Students") |>
+  pull(avg_attend_rate)
+
+group_colors = c(
+  "Economically Disadvantaged"     = "#c0392b",   # red
+  "English Language Learner"       = "#e67e22",   # amber
+  "Students with Disabilities"     = "#2980b9",   # steel blue
+  "Not Economically Disadvantaged" = "#27ae60"    # teal
+) 
+
+absent_by_group |>
+  filter(SUBGROUP_NAME != "All Students") |>
+  ggplot(aes(x = reorder(SUBGROUP_NAME, avg_attend_rate),
+             y = avg_attend_rate,
+             fill = SUBGROUP_NAME)) +
+  geom_col(width = 0.6) +
+  geom_hline(yintercept = all_students_rate,
+             linetype = "dashed", colour = "grey40", linewidth = 0.5) +
+
+  annotate("text", #avg student line
+           x     = 2,              
+           y     = all_students_rate,
+           label = sprintf("Average across all students (%.1f%%)", all_students_rate),
+           hjust = 1.05,              
+           vjust = -0.5,
+           size  = 3.2,
+           colour = "grey40") + 
+  geom_text(aes(label = sprintf("%.1f%%",     avg_attend_rate)),
+            hjust = 0.5, vjust = 2, size = 3.5, colour = "white", fontface = "bold") +
+  scale_y_continuous(breaks = seq(30, 100, by = 10), expand = c(0, 0)) +
+  coord_cartesian(ylim = c(30, 100)) +
+
+  scale_fill_manual(values = group_colors) +
+  labs(
+    x = NULL,
+    y = "Average Attendance Rate (%)",
+    title = "Economic and learning disadvantages reduce school attendance",
+    subtitle = "Attendance rate = 100 minus chronic absenteeism rate.\nChronic absenteeism defined as missing \u226510% of school days, 2024.",
+    caption = "Source: NY State absenteeism data."
+  ) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 15)) +
+  theme_minimal(base_size = 12) +
+  theme(
+  legend.position    = "none",
+  plot.title         = element_text(face = "bold"),
+  plot.subtitle      = element_text(colour = "grey30"),
+  plot.caption       = element_text(colour = "grey50", size = 9),
+  panel.grid.major.x = element_blank(),
+  axis.line          = element_line(colour = "grey20", linewidth = 0.6),
+  panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.4),
+  axis.text.x = element_text(size = 9)
+)
+```
 The disadvantaged group's chronic absenteeism rate is roughly double the
 not-disadvantaged group. That feels like a big deal because if you're not in
 the building you can't catch up academically, so this might be one
