@@ -569,10 +569,4 @@ teacher_need |>
   theme(legend.position = "none")
 ```
 
-Each jittered point is one district and the boxplots summarize the
-distribution within each need group. The pattern isn't identical district to
-district, but both metrics shift upward as need rises, with a noticeably
-heavier right tail. Disadvantaged districts face structural challenges that
-go beyond student test scores, including less stable teacher staffing.
-Combined with absenteeism, the score gap isn't only about what students bring
-to school; it's about what school brings to them.
+The chart shows that high-need districts generally have higher percentages of inexperienced teachers and teachers working out of certification. The boxplots summarize the distribution of teacher staffing conditions within each need group. The pattern is not identical for every district, but the overall distribution shifts upward for high-need districts, especially for districts with unusually high teacher instability. This suggests that disadvantaged districts may face structural challenges beyond student test scores, including less stable teacher staffing.
