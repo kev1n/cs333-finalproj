@@ -39,6 +39,31 @@ library(ggtext)
 library(scales)
 ```
 
+```{r styling}
+# ---- Shared chart styling: one palette + theme + source line for every chart ----
+report_blue   <- "#2c7fb8"
+report_orange <- "#e08214"
+report_green  <- "#41ab5d"
+report_red    <- "#d6604d"
+report_amber  <- "#fdae61"
+ref_grey      <- "grey30"
+
+src_caption <- "Source: NY State School Report Card, 2024–25"
+
+theme_report <- function(base_size = 12) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title            = element_text(face = "bold", size = rel(1.15)),
+      plot.subtitle         = element_text(colour = "grey40", size = rel(0.92)),
+      plot.caption          = element_text(colour = "grey55", size = rel(0.78), hjust = 0),
+      plot.title.position   = "plot",
+      plot.caption.position = "plot",
+      legend.position       = "top",
+      panel.grid.minor      = element_blank()
+    )
+}
+```
+
 ## Data loading
 
 The database has around 30 tables. The ones that look useful for the 
@@ -161,24 +186,20 @@ districts = district_math |>
 
 
 ggplot(districts, aes(x = per_pupil_spending, y = avg_math_score)) +
-  geom_point(alpha = 0.45, size = 2.2, color = "steelblue") +
+  geom_point(alpha = 0.45, size = 2.2, color = report_blue) +
+  geom_smooth(method = "lm", color = ref_grey, linewidth = 0.9, se = FALSE) +
   scale_x_continuous(
     labels = label_dollar(scale = 1e-3, suffix = "k"),
     limits = c(NA, 90000)
   ) +
   labs(
     title    = "Spending doesn't predict scores. If anything, the pattern runs backwards",
-    subtitle = "Each point is a NY school district, 2024–25.",
+    subtitle = "Each point is a NY school district, 2024–25",
     x        = "Per-pupil spending (federal + state + local)",
     y        = "Average grade 3–8 math scale score",
-    caption  = NULL
+    caption  = src_caption
   ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title    = element_text(face = "bold", size = 14),
-    plot.subtitle = element_text(color = "gray40", size = 10.5),
-    plot.caption  = element_text(color = "gray55", size = 8)
-  )
+  theme_report()
 ```
 
 There's no upward pattern. If anything, higher spending is weakly associated
@@ -219,25 +240,19 @@ ggplot(funding_long, aes(x = need_group, y = spending, fill = source)) +
             aes(x = need_group, y = total,
                 label = dollar(total, scale = 1e-3, suffix = "k")),
             inherit.aes = FALSE,
-            vjust = -0.4, size = 3.4, fontface = "bold", color = "gray20") +
+            vjust = -0.4, size = 3.4, fontface = "bold", color = ref_grey) +
   scale_y_continuous(labels = label_dollar(scale = 1e-3, suffix = "k"),
                      expand = expansion(mult = c(0, 0.1))) +
-  scale_fill_manual(values = c("Federal" = "#e08214", "State & Local" = "#4d9de0"),
+  scale_fill_manual(values = c("Federal" = report_orange, "State & Local" = report_blue),
                     name = "Funding source") +
   labs(
     title    = "Equity aid flows to high-need districts, but state & local funding barely changes",
-    subtitle = "Average per-pupil spending by district needs quintile, 2024–25.",
+    subtitle = "Average per-pupil spending by district needs quintile, 2024–25",
     x        = NULL, y = "Average per-pupil spending",
-    caption  = NULL
+    caption  = src_caption
   ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title    = element_text(face = "bold", size = 13.5),
-    plot.subtitle = element_text(color = "gray40", size = 10.5),
-    legend.position = "top",
-    plot.caption  = element_text(color = "gray55", size = 8),
-    panel.grid.major.x = element_blank()
-  )
+  theme_report() +
+  theme(panel.grid.major.x = element_blank())
 ```
 
 High-need districts do receive more money overall, mainly through federal aid.
@@ -252,11 +267,11 @@ money alone isn't enough to close the gap.
 
 ggplot(districts, aes(x = pct_ed, y = avg_math_score, color = per_pupil_spending)) +
   geom_point(alpha = 0.55, size = 2.2) +
-  geom_smooth(method = "lm", color = "gray20", linewidth = 1,
+  geom_smooth(method = "lm", color = ref_grey, linewidth = 0.9,
               se = FALSE) +
   scale_x_continuous(labels = function(x) paste0(x, "%")) +
   scale_color_viridis_c(
-    option = "plasma", direction = -1,
+    option = "mako", direction = -1,
     name   = "Per-pupil\nspending",
     labels = label_dollar(scale = 1e-3, suffix = "k"),
     breaks = c(20000, 35000, 50000, 75000)
@@ -264,15 +279,11 @@ ggplot(districts, aes(x = pct_ed, y = avg_math_score, color = per_pupil_spending
   labs(
     title    = "Poverty rate predicts scores far more cleanly than spending does",
     x        = "% of students economically disadvantaged",
-    y        = "Average grade 3–8 math scale score"
+    y        = "Average grade 3–8 math scale score",
+    caption  = src_caption
   ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title    = element_text(face = "bold", size = 13.5),
-    plot.subtitle = element_text(color = "gray40", size = 10.5),
-    legend.position = "right",
-    plot.caption  = element_text(color = "gray55", size = 8)
-  )
+  theme_report() +
+  theme(legend.position = "right")
 ```
 
 ```{r goal1-cors}
@@ -347,11 +358,11 @@ all_students_rate = absent_by_group |>
   pull(avg_attend_rate)
 
 group_colors = c(
-  "Economically Disadvantaged"     = "#c0392b",   # red
-  "English Language Learner"       = "#e67e22",   # amber
-  "Students with Disabilities"     = "#2980b9",   # steel blue
-  "Not Economically Disadvantaged" = "#27ae60"    # teal
-) 
+  "Economically Disadvantaged"     = report_red,
+  "English Language Learner"       = report_amber,
+  "Students with Disabilities"     = report_blue,
+  "Not Economically Disadvantaged" = report_green
+)
 
 absent_by_group |>
   filter(SUBGROUP_NAME != "All Students") |>
@@ -360,16 +371,16 @@ absent_by_group |>
              fill = SUBGROUP_NAME)) +
   geom_col(width = 0.6) +
   geom_hline(yintercept = all_students_rate,
-             linetype = "dashed", colour = "grey40", linewidth = 0.5) +
+             linetype = "dashed", colour = ref_grey, linewidth = 0.6) +
 
   annotate("text", #avg student line
-           x     = 2,              
+           x     = 2,
            y     = all_students_rate,
            label = sprintf("Average across all students (%.1f%%)", all_students_rate),
-           hjust = 1.05,              
+           hjust = 1.05,
            vjust = -0.5,
            size  = 3.2,
-           colour = "grey40") + 
+           colour = ref_grey) +
   geom_text(aes(label = sprintf("%.1f%%",     avg_attend_rate)),
             hjust = 0.5, vjust = 2, size = 3.5, colour = "white", fontface = "bold") +
   scale_y_continuous(breaks = seq(30, 100, by = 10), expand = c(0, 0)) +
@@ -381,20 +392,15 @@ absent_by_group |>
     y = "Average Attendance Rate (%)",
     title = "Economic and learning disadvantages reduce school attendance",
     subtitle = "Attendance rate = 100 minus chronic absenteeism rate.\nChronic absenteeism defined as missing \u226510% of school days, 2024.",
-    caption = "Source: NY State absenteeism data."
+    caption = src_caption
   ) +
   scale_x_discrete(labels = function(x) str_wrap(x, width = 15)) +
-  theme_minimal(base_size = 12) +
+  theme_report(base_size = 12) +
   theme(
-  legend.position    = "none",
-  plot.title         = element_text(face = "bold"),
-  plot.subtitle      = element_text(colour = "grey30"),
-  plot.caption       = element_text(colour = "grey50", size = 9),
-  panel.grid.major.x = element_blank(),
-  axis.line          = element_line(colour = "grey20", linewidth = 0.6),
-  panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.4),
-  axis.text.x = element_text(size = 9)
-)
+    legend.position    = "none",
+    panel.grid.major.x = element_blank(),
+    axis.text.x        = element_text(size = 9)
+  )
 ```
 Economically disadvantaged students miss roughly twice as much school as their
 peers. An academic gap can't close from outside the building, which makes
@@ -406,6 +412,8 @@ Teacher data isn't broken out by student subgroup, so the lens shifts to the
 district level: do high-need districts get a worse staffing deal?
 
 ```{r}
+#| fig-width: 8
+#| fig-height: 6
 district_ed = math_exams |>
   mutate(
     ENTITY_CD = as.character(ENTITY_CD),
@@ -477,16 +485,25 @@ teacher_need = teacher_dists |>
 teacher_need |>
   ggplot(aes(x = need_group, y = pct, fill = need_group)) +
   geom_boxplot(width = 0.5, alpha = 0.7, outlier.shape = NA) +
-  facet_wrap(~ metric, scales = "free_y") +
+  facet_wrap(~ metric, ncol = 1) +
+  coord_flip(ylim = c(0, 40)) +
+  scale_fill_brewer(palette = "RdBu", direction = -1) +
   labs(
     x = NULL,
     y = "Teachers in category (%)",
     title = "High-need districts tend to have more teacher staffing instability",
-    subtitle = "Districts are grouped by their share of economically disadvantaged students, 2024",
+    subtitle = "Districts grouped by their share of economically\ndisadvantaged students, 2024",
+    caption = src_caption,
     fill = NULL
   ) +
-  theme_minimal() +
-  theme(legend.position = "none")
+  theme_report(base_size = 12) +
+  theme(
+    legend.position = "none",
+    panel.spacing = unit(1.8, "lines"),
+    panel.border = element_rect(color = "grey80", fill = NA, linewidth = 0.4),
+    strip.background = element_rect(fill = "grey90", color = NA),
+    strip.text = element_text(face = "bold", margin = margin(6, 0, 6, 0))
+  )
 ```
 
 High-need districts carry higher shares of inexperienced teachers and teachers working out of certification. Within each need group the pattern isn't identical district to district, but the spread shifts upward as need rises, with a heavier tail where teacher instability runs unusually high. The disadvantage extends beyond student test scores into less stable teacher staffing, part of what high-need districts are up against.
