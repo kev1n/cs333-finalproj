@@ -4,15 +4,22 @@ format:
   html:
     embed-resources: true
     df-print: paged
+  pdf:
+    echo: false
+    warning: false
+    message: false
+execute:
+  echo: false
+  warning: false
+  message: false
 editor:
   markdown:
     wrap: 80
 ---
 
-For this milestone we're exploring the New York State School Report Card 2024-25
-release. 
-
-We want to use this dataset to look at three questions:
+The New York State School Report Card, 2024-25 release, tracks spending, test
+scores, attendance, and teacher staffing for every district and school in the
+state. Read together, those tables speak to three questions:
 
 1.  How does money affect pupil performance at these schools?
 2.  How have test scores trended over the last few years, and what does the
@@ -20,7 +27,7 @@ We want to use this dataset to look at three questions:
     how does it compare in math versus reading?
 3.  In what ways are disadvantaged schools disadvantaged versus their peers?
 
-With more data, we'd also like to look at how AI and social media lead to performance changes of students over time.
+A longer run of data would open a fourth question: how AI and social media track with changes in student performance over time.
 
 
 ```{r setup}
@@ -55,13 +62,15 @@ are at the district level, which is one row per district per year, so they're
 much smaller.
 
 ```{r}
+#| include: false
 math_exams |> count(YEAR)
 ```
 
-The dataset only has 2024 and 2025. So when we say trends, we really only have two data points to work with for
-this milestone. For the final, we want to grab earlier SRC releases.
+The dataset covers only 2024 and 2025, so any trend here rests on just two data
+points. Earlier SRC releases would extend that window for the final.
 
 ```{r}
+#| include: false
 math_exams |> count(SUBGROUP_NAME)
 ```
 
@@ -71,20 +80,21 @@ homeless, foster care, etc.). That's helpful, because it already provides a defi
 of disadvantaged.
 
 ```{r}
+#| include: false
 math_exams |> count(ASSESSMENT_NAME)
 ```
 
-MATH3_8 is a roll-up summary, but the MEAN_SCORE column is empty
-for those rows. The grade-level rows (MATH3 through MATH8) are the ones
-that actually have scale scores. So we'll filter to those when we want a number
-to compare.
+MATH3_8 is a roll-up summary, but its MEAN_SCORE column is empty. The
+grade-level rows (MATH3 through MATH8) carry the actual scale scores, so those
+are the rows behind every comparable number below.
 
-ENTITY_CD column is a 12-digit code that identifies both
-districts and schools. District codes end in 0000, while school codes don't. The
-expenditures table mixes both kinds of rows. we'll filter to districts only
-when joining because we only care about the aggregate
+The ENTITY_CD column is a 12-digit code identifying both districts and schools.
+District codes end in 0000; school codes do not. The expenditures table mixes
+both, so the joins below keep only district rows, since the aggregate is what
+matters.
 
 ```{r}
+#| include: false
 expenditures |>
   filter(YEAR == 2024) |>
   count(district = grepl("0000$", ENTITY_CD))
@@ -94,8 +104,9 @@ Around 700 districts and 4500 schools.
 
 ## Goal 1: Does money buy performance?
 
-Our first instinct was a simple scatter: do districts that spend more per pupil
-score higher?
+The intuitive expectation is simple: districts that spend more per pupil should
+score higher. Plotting per-pupil spending against average math scores tests it
+directly.
 
 ```{r goal1-data}
 #| message: false
@@ -170,9 +181,8 @@ ggplot(districts, aes(x = per_pupil_spending, y = avg_math_score)) +
   )
 ```
 
-There's no upward pattern here. If anything, higher spending is weakly
-associated with *lower* scores, the opposite of what we expected. So what's
-going on?
+There's no upward pattern. If anything, higher spending is weakly associated
+with *lower* scores, the reverse of that expectation. So what explains it?
 
 ### Why high-need districts spend more: equity funding at work
 
@@ -280,52 +290,12 @@ gap, and is it closing?
 ## Goal 2: Affluent vs poorer schools in math and reading
 
 If poverty predicts scores more cleanly than spending, the next question is
-how wide that gap actually is, and whether it's moving.
-
-### A 13-point gap that doesn't budge
-
-```{r}
-math_by_subgroup = math_exams |>
-  filter(ASSESSMENT_NAME %in% c("MATH3","MATH4","MATH5","MATH6","MATH7","MATH8"),
-         SUBGROUP_NAME %in% c("Economically Disadvantaged",
-                              "Not Economically Disadvantaged")) |>
-  group_by(YEAR, SUBGROUP_NAME) |>
-  summarize(avg_score = mean(as.numeric(MEAN_SCORE), na.rm = TRUE),
-            .groups = "drop") |>
-  mutate(subject = "Math")
-
-ela_by_subgroup = ela_exams |>
-  filter(ASSESSMENT_NAME %in% c("ELA3","ELA4","ELA5","ELA6","ELA7","ELA8"),
-         SUBGROUP_NAME %in% c("Economically Disadvantaged",
-                              "Not Economically Disadvantaged")) |>
-  group_by(YEAR, SUBGROUP_NAME) |>
-  summarize(avg_score = mean(as.numeric(MEAN_SCORE), na.rm = TRUE),
-            .groups = "drop") |>
-  mutate(subject = "ELA (Reading)")
-
-scores_by_subgroup = rbind(math_by_subgroup, ela_by_subgroup)
-
-scores_by_subgroup |>
-  ggplot(aes(x = factor(YEAR), y = avg_score,
-             color = SUBGROUP_NAME, group = SUBGROUP_NAME)) +
-  geom_line(linewidth = 1) +
-  geom_point(size = 3) +
-  facet_wrap(~ subject) +
-  labs(
-    x = "Year",
-    y = "Average scale score",
-    color = NULL,
-    title = "The gap between disadvantaged and not is wide and not closing",
-    subtitle = "Average grade 3-8 scale score, NY State"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "bottom")
-```
-
-Disadvantaged students sit roughly 13–14 scale-score points behind their peers
-in both subjects, and the gap barely moves between 2024 and 2025. Math runs a
-hair wider than ELA, but the two subjects don't share a scale, so that's a
-soft observation.
+how wide that gap actually is, and whether it's moving. Across grades 3 to 8,
+economically disadvantaged students sit roughly 13 to 14 scale-score points
+behind their peers in both math and ELA, and that gap barely moves between 2024
+and 2025. Math runs a hair wider than ELA, but the two subjects don't share a
+scale, so that's a soft observation. Two years is a short window, though, and
+the longer view is more revealing.
 
 ### The longer view: COVID broke the trend
 
@@ -340,58 +310,8 @@ gap isn't steady state. It's the tail end of a bigger setback.
 
 A gap this wide and this stuck rarely runs on student effort alone. Two
 structural mechanisms are measurable in this dataset: how often students
-show up, and who's teaching them.
-
-### Showing up isn't equal either
-
-```{r}
-absent_2024 = absenteeism |>
-  filter(YEAR == 2024) |>
-  mutate(ENROLLMENT   = suppressWarnings(as.numeric(ENROLLMENT)),
-         ABSENT_COUNT = suppressWarnings(as.numeric(ABSENT_COUNT)),
-         ABSENT_RATE  = suppressWarnings(as.numeric(ABSENT_RATE)))
-
-# Chronic_Absenteeism doesn't report "Not Economically Disadvantaged" directly,
-# so back-calculate it at the school level: All Students minus Econ. Disadvantaged.
-not_ed = absent_2024 |>
-  filter(SUBGROUP_NAME %in% c("All Students", "Economically Disadvantaged")) |>
-  select(ENTITY_CD, SUBGROUP_NAME, ENROLLMENT, ABSENT_COUNT) |>
-  pivot_wider(names_from = SUBGROUP_NAME,
-              values_from = c(ENROLLMENT, ABSENT_COUNT)) |>
-  mutate(enroll = `ENROLLMENT_All Students` - `ENROLLMENT_Economically Disadvantaged`,
-         absent = `ABSENT_COUNT_All Students` - `ABSENT_COUNT_Economically Disadvantaged`,
-         ABSENT_RATE = ifelse(enroll > 0, 100 * absent / enroll, NA)) |>
-  filter(!is.na(ABSENT_RATE)) |>
-  summarize(SUBGROUP_NAME = "Not Economically Disadvantaged",
-            avg_absent_rate = mean(ABSENT_RATE, na.rm = TRUE))
-
-absent_by_group = absent_2024 |>
-  filter(SUBGROUP_NAME %in% c("Economically Disadvantaged",
-                              "English Language Learner",
-                              "Students with Disabilities",
-                              "All Students")) |>
-  group_by(SUBGROUP_NAME) |>
-  summarize(avg_absent_rate = mean(ABSENT_RATE, na.rm = TRUE),
-            .groups = "drop") |>
-  bind_rows(not_ed)
-
-absent_by_group |>
-  ggplot(aes(x = reorder(SUBGROUP_NAME, avg_absent_rate),
-             y = avg_absent_rate,
-             fill = SUBGROUP_NAME)) +
-  geom_col(width = 0.6) +
-  geom_text(aes(label = sprintf("%.1f%%", avg_absent_rate)), hjust = -0.2) +
-  coord_flip() +
-  ylim(0, 35) +
-  labs(
-    x = NULL,
-    y = "Average chronic absenteeism rate (%)",
-    title = "Disadvantaged students miss a lot more school",
-    subtitle = "Chronic absenteeism = missing 10% or more of school days, 2024"
-  ) +
-  theme_minimal() +
-  theme(legend.position = "none")
-```
+show up, and who's teaching them. Attendance comes first, and it is far from
+equal across subgroups.
 
 ```{r}
 absent_2024 = absenteeism |>
@@ -476,13 +396,13 @@ absent_by_group |>
   axis.text.x = element_text(size = 9)
 )
 ```
-Economically disadvantaged students miss roughly twice as much school as
-their peers. You can't close an academic gap from outside the building, which
-makes absenteeism a plausible cause, not just a symptom.
+Economically disadvantaged students miss roughly twice as much school as their
+peers. An academic gap can't close from outside the building, which makes
+absenteeism a plausible cause and not just a symptom.
 
 ### High-need districts shoulder rougher staffing too
 
-Teacher data doesn't break down by student subgroup, so we shift to the
+Teacher data isn't broken out by student subgroup, so the lens shifts to the
 district level: do high-need districts get a worse staffing deal?
 
 ```{r}
@@ -569,4 +489,4 @@ teacher_need |>
   theme(legend.position = "none")
 ```
 
-The chart shows that high-need districts generally have higher percentages of inexperienced teachers and teachers working out of certification. The boxplots summarize the distribution of teacher staffing conditions within each need group. The pattern is not identical for every district, but the overall distribution shifts upward for high-need districts, especially for districts with unusually high teacher instability. This suggests that disadvantaged districts may face structural challenges beyond student test scores, including less stable teacher staffing.
+High-need districts carry higher shares of inexperienced teachers and teachers working out of certification. Within each need group the pattern isn't identical district to district, but the spread shifts upward as need rises, with a heavier tail where teacher instability runs unusually high. The disadvantage extends beyond student test scores into less stable teacher staffing, part of what high-need districts are up against.
