@@ -41,12 +41,12 @@ library(scales)
 
 ```{r styling}
 # ---- Shared chart styling: one palette + theme + source line for every chart ----
-report_blue   <- "#2c7fb8"
-report_orange <- "#e08214"
-report_green  <- "#41ab5d"
-report_red    <- "#d6604d"
-report_amber  <- "#fdae61"
-ref_grey      <- "grey30"
+# Two opposing colors drawn from the cividis scale + a neutral grey.
+# cividis low end = deep blue, high end = gold.
+report_primary   <- "#00326F"  # cividis ~0.10, deep blue
+report_secondary <- "#E7D159"  # cividis ~0.90, gold
+report_grey      <- "grey60"
+ref_grey         <- "grey30"
 
 src_caption <- "Source: NY State School Report Card, 2024–25"
 
@@ -185,15 +185,45 @@ districts = district_math |>
 #| fig-height: 5.5
 
 
+# Linear fit + 95% CI computed manually so we can give the band a texture
+lm_fit = lm(avg_math_score ~ per_pupil_spending, data = districts)
+x_grid = seq(min(districts$per_pupil_spending),
+             max(districts$per_pupil_spending), length.out = 300)
+lm_pred = predict(lm_fit,
+                  newdata = data.frame(per_pupil_spending = x_grid),
+                  interval = "confidence", level = 0.95)
+ci_band = tibble(
+  x   = x_grid,
+  fit = lm_pred[, "fit"],
+  lo  = lm_pred[, "lwr"],
+  hi  = lm_pred[, "upr"]
+)
+
+# Stipple texture: a fine grid of dots, keeping only those inside the CI band
+stipple = expand_grid(
+  x = seq(min(x_grid), max(x_grid), length.out = 220),
+  y = seq(min(districts$avg_math_score), max(districts$avg_math_score),
+          length.out = 240)
+) |>
+  mutate(lo = approx(ci_band$x, ci_band$lo, x)$y,
+         hi = approx(ci_band$x, ci_band$hi, x)$y) |>
+  filter(y >= lo, y <= hi)
+
 ggplot(districts, aes(x = per_pupil_spending, y = avg_math_score)) +
-  geom_point(alpha = 0.45, size = 2.2, color = report_blue) +
-  geom_smooth(method = "lm", color = ref_grey, linewidth = 0.9, se = FALSE) +
+  geom_point(alpha = 0.45, size = 2.2, color = report_grey) +
+  geom_point(data = stipple, aes(x = x, y = y), inherit.aes = FALSE,
+             size = 0.15, color = ref_grey, alpha = 0.55) +
+  geom_ribbon(data = ci_band, aes(x = x, ymin = lo, ymax = hi),
+              inherit.aes = FALSE, fill = NA, color = ref_grey,
+              linetype = "22", linewidth = 0.3) +
+  geom_line(data = ci_band, aes(x = x, y = fit), inherit.aes = FALSE,
+            color = ref_grey, linewidth = 0.9) +
   scale_x_continuous(
     labels = label_dollar(scale = 1e-3, suffix = "k"),
     limits = c(NA, 90000)
   ) +
   labs(
-    title    = "Spending doesn't predict scores. If anything, the pattern runs backwards",
+    title    = "Spending doesn't predict scores.",
     subtitle = "Each point is a NY school district, 2024–25",
     x        = "Per-pupil spending (federal + state + local)",
     y        = "Average grade 3–8 math scale score",
@@ -243,7 +273,7 @@ ggplot(funding_long, aes(x = need_group, y = spending, fill = source)) +
             vjust = -0.4, size = 3.4, fontface = "bold", color = ref_grey) +
   scale_y_continuous(labels = label_dollar(scale = 1e-3, suffix = "k"),
                      expand = expansion(mult = c(0, 0.1))) +
-  scale_fill_manual(values = c("Federal" = report_orange, "State & Local" = report_blue),
+  scale_fill_manual(values = c("Federal" = report_secondary, "State & Local" = report_primary),
                     name = "Funding source") +
   labs(
     title    = "Equity aid flows to high-need districts, but state & local funding barely changes",
@@ -271,7 +301,7 @@ ggplot(districts, aes(x = pct_ed, y = avg_math_score, color = per_pupil_spending
               se = FALSE) +
   scale_x_continuous(labels = function(x) paste0(x, "%")) +
   scale_color_viridis_c(
-    option = "mako", direction = -1,
+    option = "cividis", direction = -1,
     name   = "Per-pupil\nspending",
     labels = label_dollar(scale = 1e-3, suffix = "k"),
     breaks = c(20000, 35000, 50000, 75000)
@@ -358,10 +388,10 @@ all_students_rate = absent_by_group |>
   pull(avg_attend_rate)
 
 group_colors = c(
-  "Economically Disadvantaged"     = report_red,
-  "English Language Learner"       = report_orange,
-  "Students with Disabilities"     = report_blue,
-  "Not Economically Disadvantaged" = report_green
+  "Economically Disadvantaged"     = report_secondary,
+  "English Language Learner"       = report_grey,
+  "Students with Disabilities"     = report_grey,
+  "Not Economically Disadvantaged" = report_primary
 )
 
 absent_by_group |>
@@ -438,16 +468,16 @@ district_ed = math_exams |>
   mutate(
     need_group_num = ntile(pct_econ_disadvantaged, 4),
     need_group = case_when(
-      need_group_num == 1 ~ "Low-need districts\n(bottom 25%)",
+      need_group_num == 1 ~ "Low-need districts",
       need_group_num %in% c(2, 3) ~ "Middle districts",
-      need_group_num == 4 ~ "High-need districts\n(top 25%)"
+      need_group_num == 4 ~ "High-need districts"
     ),
     need_group = factor(
       need_group,
       levels = c(
-        "Low-need districts\n(bottom 25%)",
+        "Low-need districts",
         "Middle districts",
-        "High-need districts\n(top 25%)"
+        "High-need districts"
       )
     )
   )
@@ -486,7 +516,11 @@ teacher_need |>
   geom_boxplot(width = 0.5, alpha = 0.7, outlier.shape = NA) +
   facet_wrap(~ metric, ncol = 1) +
   coord_flip(ylim = c(0, 40)) +
-  scale_fill_brewer(palette = "RdBu", direction = -1) +
+  scale_fill_manual(values = c(
+    "Low-need districts"  = report_primary,
+    "Middle districts"    = report_grey,
+    "High-need districts" = report_secondary
+  )) +
   labs(
     x = NULL,
     y = "Teachers in category (%)",
