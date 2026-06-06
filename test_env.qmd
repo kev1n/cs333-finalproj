@@ -340,12 +340,14 @@ the longer view is more revealing.
 
 ### The longer view: COVID broke the trend
 
-![Standardized test scores: economically disadvantaged vs not, ELA and Math, 2015–2025](passing_rate_by_econ_2015_2025.png)
+![Standardized test scores: economically disadvantaged vs not, ELA and Math, 2015–2025](img1.png)
+![](img2.png)
 
-Before the pandemic, both groups climbed together. After, math fell harder
-than ELA for economically disadvantaged students, and they haven't recovered
-to their pre-pandemic trajectory the way their peers have. The flat 2024–2025
-gap isn't steady state. It's the tail end of a bigger setback.
+
+Prior the pandemic, math and ELA trends were consistent with each other, indicating standards and tests were measured effectively. 
+After, we see math scores drop much harder than language with a much clearer recovery, demonstrating math scores are more strongly correlated with quality of in-class instruction.
+With that in mind, we can see in the second graph that math had a larger gap based on economic advantage in every single year than reading, meaning that the quality of disadvantaged students' instruction is worse than we'd expect based on external factors, even in spite of receiving economic aid.
+So, why are disadvantaged students receiving worse instruction?
 
 ## Goal 3: How are disadvantaged schools disadvantaged?
 
